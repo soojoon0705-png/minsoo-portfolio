@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+
+@theme {
+  --color-smokyBlack: #0a0a0a;   /* 이미지 속 깊은 블랙 */
+  --color-floralWhite: #FFFBF4;  /* TECHNICAL 섹션 배경색 */
+  --color-accentPurple: #242252; /* PURE EMOTION 포인트 색상 */
+  --color-bone: #D8CFBC;         /* 텍스트용 연한 베이지 */
+}
+
+body {
+  @apply bg-smokyBlack text-white;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+/* 부드러운 스크롤을 위한 설정 */
+html {
+  scroll-behavior: smooth;
+}
