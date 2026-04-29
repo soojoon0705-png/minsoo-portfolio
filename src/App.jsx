@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, useScroll, useTransform, useSpring, AnimatePresence, useMotionValue } from 'framer-motion';
 import { Menu, X, ChevronDown, ArrowUpRight, MoveHorizontal } from 'lucide-react';
-// ✨ NEW: 3D 큐브 구현을 위한 Three.js 부품들
+// ✨ Three.js 부품들
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -73,26 +73,11 @@ const GrainOverlay = () => (
 
 const customEase = [0.16, 1, 0.3, 1];
 
-/** * ✨ NEW 3. 점선(Point Grid) 입체 큐브 구현 * (AI 티 안 나게 마우스 움직임에 미세하고 묵직하게 반응) */
-function DottedCubePoints({ density = 5 }) {
-  const pointsRef = useRef();
-
-  const particles = useMemo(() => {
-    const count = Math.pow(density, 3);
-    const positions = new Float32Array(count * 3);
-    let i = 0;
-    for (let x = 0; x < density; x++) {
-      for (let y = 0; y < density; y++) {
-        for (let z = 0; z < density; z++) {
-          // 큐브 중심점 맞추기 (-1 ~ 1 범위)
-          positions[i++] = (x / (density - 1)) * 2 - 1;
-          positions[i++] = (y / (density - 1)) * 2 - 1;
-          positions[i++] = (z / (density - 1)) * 2 - 1;
-        }
-      }
-    }
-    return positions;
-  }, [density]);
+/** * ✨ NEW 3. 기하학적 와이어프레임 큐브 (단 하나) * (AI 느낌 방지용: 미세하고 부드러운 쫀득한 회전) */
+function ColoristCube({ mouse }) {
+  const cubeRef = useRef();
+  // 💡 레퍼런스의 geometric한 형태를 위해 큐브 와이어프레임을 생성
+  const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(2, 2, 2)), []);
 
   useFrame((state) => {
     // 💡 마우스 위치 수집
@@ -100,41 +85,39 @@ function DottedCubePoints({ density = 5 }) {
     const mouseY = state.mouse.y; // normalized -1 to 1
 
     // 💡 미세하고 부드러운 회전 (Damping 적용)
-    pointsRef.current.rotation.y = THREE.MathUtils.lerp(pointsRef.current.rotation.y, mouseX * 0.3, 0.05);
-    pointsRef.current.rotation.x = THREE.MathUtils.lerp(pointsRef.current.rotation.x, -mouseY * 0.3, 0.05);
+    // THREE.MathUtils.lerp를 사용하여 쫀득한 느낌을 줌
+    cubeRef.current.rotation.y = THREE.MathUtils.lerp(cubeRef.current.rotation.y, mouseX * 0.25, 0.05); // Y축 회전 (좌우)
+    cubeRef.current.rotation.x = THREE.MathUtils.lerp(cubeRef.current.rotation.x, -mouseY * 0.25, 0.05); // X축 회전 (상하)
   });
 
   return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={Math.pow(density, 3)}
-          array={particles}
-          itemSize={3}
+    // scale을 살짝 키워서 텍스트를 감싸는 느낌을 줌
+    <group ref={cubeRef} scale={1.2}>
+      {/* 레퍼런스의 와이어프레임 형태를 구현 */}
+      <lineSegments geometry={edgesGeometry}>
+        <lineBasicMaterial 
+          color="#242252" // 테마 컬러 사용
+          linewidth={1.5} // 선 두께 조절 ( Three.js는 linewidth 1까지만 지원하는 경우가 많지만 시각적 효과를 위해)
+          transparent
+          opacity={0.8} // 은은한 존재감
         />
-      </bufferGeometry>
-      <pointsMaterial
-        size={0.06} // 점 크기 (레퍼런스 참고)
-        sizeAttenuation={true}
-        color="#242252" // 민수님 사이트 테마 컬러 사용
-        transparent
-        opacity={0.7} // 은은한 존재감
-        blending={THREE.AdditiveBlending} // 빛 번짐 효과
-        depthWrite={false}
-      />
-    </points>
+      </lineSegments>
+      {/* 💡 고급스러움 추가: 미세한 앰비언트 글로우를 큐브 안에 추가 */}
+      <mesh scale={1.05}>
+        <boxGeometry args={[2, 2, 2]} />
+        <meshBasicMaterial color="#242252" transparent opacity={0.03} blending={THREE.AdditiveBlending} depthWrite={false}/>
+      </mesh>
+    </group>
   );
 }
 
-function InteractiveCubeBackground() {
+function InteractiveCubeBackground({ mouse }) {
   return (
     <div className="absolute inset-0 z-0 pointer-events-none opacity-60">
       <Canvas camera={{ position: [0, 0, 4.5], fov: 60 }}>
-        {/* Minimalist lighting */}
-        <ambientLight intensity={0.1} />
-        <pointLight position={[10, 10, 10]} intensity={0.5} />
-        <DottedCubePoints density={5} />
+        {/* Minimalist lighting for lines */}
+        <ambientLight intensity={0.2} />
+        <ColoristCube mouse={mouse} />
       </Canvas>
     </div>
   );
@@ -285,18 +268,18 @@ export default function App() {
         </motion.div>
       </section>
 
-      {/* --- ✨ CAPTURING PURE EMOTION WITH 레퍼런스 3D 큐브 --- */}
+      {/* --- ✨ CAP트처링 퓨어 이모션 WITH NEW STYLIZED CUBE --- */}
       <section className="min-h-screen flex flex-col items-center justify-center bg-[#0a0a0a] py-32 md:py-40 px-6 overflow-hidden relative selection:bg-[#242252]/40" onMouseEnter={() => setCursorVariant("default")}>
         
-        {/* 🔥 NEW: 마우스를 따라 미세하게 회전하는 점선 큐브 Canvas */}
-        <InteractiveCubeBackground />
+        {/* 🔥 NEW: 기하학적 와이어프레임 큐브 Canvas */}
+        <InteractiveCubeBackground mouse={mouseX} />
 
         {/* 텍스트는 큐브보다 위에 나오도록 z-10 적용 */}
         <motion.div style={{ y: titleY }} className="text-center max-w-5xl relative z-10">
           <motion.div variants={staggerContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }}>
             <h2 className="text-4xl md:text-8xl font-black tracking-tighter uppercase mb-6 leading-tight flex flex-col items-center mix-blend-difference">
-              <div className="overflow-hidden"><motion.span variants={revealUp} className="block text-white">{t.capture1}</motion.span></div>
-              <div className="overflow-hidden"><motion.span variants={revealUp} className="block text-[#242252]">{t.capture2}</motion.span></div>
+              <div className="overflow-hidden"><motion.span variants={revealUp} className="block text-white drop-shadow-2xl">{t.capture1}</motion.span></div>
+              <div className="overflow-hidden"><motion.span variants={revealUp} className="block text-[#242252] drop-shadow-2xl">{t.capture2}</motion.span></div>
             </h2>
           </motion.div>
           <motion.div initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} transition={{ duration: 1.5, ease: customEase }} viewport={{ once: true }} className="w-16 md:w-20 h-px bg-[#242252] mx-auto my-10 md:my-12 opacity-50 origin-center"></motion.div>
