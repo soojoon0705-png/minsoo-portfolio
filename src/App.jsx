@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, useScroll, useTransform, useSpring, AnimatePresence, useMotionValue } from 'framer-motion';
 import { Menu, X, ChevronDown, ArrowUpRight, MoveHorizontal } from 'lucide-react';
+// ✨ NEW: 3D 큐브 구현을 위한 Three.js 부품들
+import { Canvas, useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 
 /** * 1. 마그네틱(자석) 버튼 컴포넌트 */
 function Magnetic({ children }) {
@@ -9,6 +12,7 @@ function Magnetic({ children }) {
   
   const handleMouse = (e) => {
     const { clientX, clientY } = e;
+    if (!ref.current) return;
     const { height, width, left, top } = ref.current.getBoundingClientRect();
     const middleX = clientX - (left + width / 2);
     const middleY = clientY - (top + height / 2);
@@ -69,9 +73,76 @@ const GrainOverlay = () => (
 
 const customEase = [0.16, 1, 0.3, 1];
 
+/** * ✨ NEW 3. 점선(Point Grid) 입체 큐브 구현 * (AI 티 안 나게 마우스 움직임에 미세하고 묵직하게 반응) */
+function DottedCubePoints({ density = 5 }) {
+  const pointsRef = useRef();
+
+  const particles = useMemo(() => {
+    const count = Math.pow(density, 3);
+    const positions = new Float32Array(count * 3);
+    let i = 0;
+    for (let x = 0; x < density; x++) {
+      for (let y = 0; y < density; y++) {
+        for (let z = 0; z < density; z++) {
+          // 큐브 중심점 맞추기 (-1 ~ 1 범위)
+          positions[i++] = (x / (density - 1)) * 2 - 1;
+          positions[i++] = (y / (density - 1)) * 2 - 1;
+          positions[i++] = (z / (density - 1)) * 2 - 1;
+        }
+      }
+    }
+    return positions;
+  }, [density]);
+
+  useFrame((state) => {
+    // 💡 마우스 위치 수집
+    const mouseX = state.mouse.x; // normalized -1 to 1
+    const mouseY = state.mouse.y; // normalized -1 to 1
+
+    // 💡 미세하고 부드러운 회전 (Damping 적용)
+    pointsRef.current.rotation.y = THREE.MathUtils.lerp(pointsRef.current.rotation.y, mouseX * 0.3, 0.05);
+    pointsRef.current.rotation.x = THREE.MathUtils.lerp(pointsRef.current.rotation.x, -mouseY * 0.3, 0.05);
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          count={Math.pow(density, 3)}
+          array={particles}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.06} // 점 크기 (레퍼런스 참고)
+        sizeAttenuation={true}
+        color="#242252" // 민수님 사이트 테마 컬러 사용
+        transparent
+        opacity={0.7} // 은은한 존재감
+        blending={THREE.AdditiveBlending} // 빛 번짐 효과
+        depthWrite={false}
+      />
+    </points>
+  );
+}
+
+function InteractiveCubeBackground() {
+  return (
+    <div className="absolute inset-0 z-0 pointer-events-none opacity-60">
+      <Canvas camera={{ position: [0, 0, 4.5], fov: 60 }}>
+        {/* Minimalist lighting */}
+        <ambientLight intensity={0.1} />
+        <pointLight position={[10, 10, 10]} intensity={0.5} />
+        <DottedCubePoints density={5} />
+      </Canvas>
+    </div>
+  );
+}
+
 const translations = {
-  ko: { role: "컬러리스트", navWork: "작업", navAbout: "소개", scroll: "스크롤하여 탐색", capture1: "본질을", capture2: "포착하다", captureDesc: "영상에 감정을 불어넣고 서사를 완성하는 시네마틱 룩을 추구합니다.\n전문적인 컬러 사이언스를 기반으로 시각적 완성도의 정점을 지향합니다.", worksTitle: "작업물.", process: "공정 요약", drag: "드래그", ediTitle: "본질에\n집중하는 시선", ediP1: "저는 화려함보다는 본질에 집중하는 법을 배웠습니다.\n\n남들보다 특별하지 않았던 그 환경은 역설적으로 제가 만들어내는 모든 프레임에 더욱 신중을 기하게 만드는 밑거름이 되었습니다.", ediP2: "이제 세상은 단순히 화려한 색감의 풍요로움이 아니라, 우리가 소비하는 영상 속에 담긴 의도적이고 건강한 가치를 필요로 합니다.", ediQuote: "의도를 담아\n세상을 구축하다", footer: "서울 — © 2026 개인 아카이브." },
-  en: { role: "COLORIST", navWork: "WORK", navAbout: "ABOUT", scroll: "Scroll to explore", capture1: "CAPTURING", capture2: "PURE EMOTION", captureDesc: "Pursuing a cinematic look that breathes emotion into the narrative.\nAiming for the pinnacle of visual perfection based on professional color science.", worksTitle: "WORKS.", process: "Process Breakdown", drag: "Drag", ediTitle: "A Gaze Focused\nOn The Essence", ediP1: "I learned to focus on the essence rather than the flashiness.\n\nGrowing up in an ordinary environment paradoxically became the foundation that makes me more deliberate with every frame I create.", ediP2: "The world today needs intentional and healthy values embedded in the media we consume, not just an abundance of colorful visuals.", ediQuote: "Build the world\nwith intention", footer: "Based in Seoul, KR — © 2026 Personal Archive." }
+  ko: { role: "컬러리스트", navWork: "작업", navAbout: "소개", scroll: "스크롤하여 탐색", capture1: "본질을", capture2: "포착하다", captureDesc: "영상에 감정을 불어넣고 서사를 완성하는 시네마틱 룩을 추구합니다.\n전문적인 컬러 사이언스를 기반으로 시각적 완성도의 정점을 지향합니다.", worksTitle: "작업물.", process: "공정 요약", drag: "드래그", ediTitle: "본질에\n집중하는 시선", ediP1: "저는 화려함보다는 본질에 집중하는 법을 배웠습니다.\n\n남들보다 특별하지 않았던 그 환경은 역설적으로 제가 만들어내는 모든 프레임에 더욱 신중을 기하게 만드는 밑거름이 되었습니다.", ediP2: "이제 세상은 단순히 화려한 색감의 풍요로움이 아니라, 우리가 소비하는 영상 속에 담긴 의도적이고 건강한 가치를 필요로 합니다.", ediQuote: "의도를 담아\n세상을 구축하다", footer: "서울 — © 2026 KIM MINSOO." },
+  en: { role: "COLORIST", navWork: "WORK", navAbout: "ABOUT", scroll: "Scroll to explore", capture1: "CAPTURING", capture2: "PURE EMOTION", captureDesc: "Pursuing a cinematic look that breathes emotion into the narrative.\nAiming for the pinnacle of visual perfection based on professional color science.", worksTitle: "WORKS.", process: "Process Breakdown", drag: "Drag", ediTitle: "A Gaze Focused\nOn The Essence", ediP1: "I learned to focus on the essence rather than the flashiness.\n\nGrowing up in an ordinary environment paradoxically became the foundation that makes me more deliberate with every frame I create.", ediP2: "The world today needs intentional and healthy values embedded in the media we consume, not just an abundance of colorful visuals.", ediQuote: "Build the world\nwith intention", footer: "Based in Seoul, KR — © 2026 KIM MINSOO." }
 };
 
 const projects = [
@@ -113,8 +184,6 @@ export default function App() {
   const [cursorVariant, setCursorVariant] = useState("default");
   const mouseX = useMotionValue(typeof window !== "undefined" ? window.innerWidth / 2 : 0);
   const mouseY = useMotionValue(typeof window !== "undefined" ? window.innerHeight / 2 : 0);
-  const smoothX = useSpring(mouseX, { stiffness: 100, damping: 20 });
-  const smoothY = useSpring(mouseY, { stiffness: 100, damping: 20 });
   const fastX = useSpring(mouseX, { stiffness: 500, damping: 28 });
   const fastY = useSpring(mouseY, { stiffness: 500, damping: 28 });
 
@@ -151,18 +220,12 @@ export default function App() {
     <div className="w-full relative bg-[#0a0a0a] text-white font-sans overflow-x-hidden whitespace-pre-wrap md:cursor-none selection:bg-white/30">
       <GrainOverlay />
 
-      {/* ✨ 하이엔드: 마우스를 따라다니는 시네마틱 렌즈 플레어 (앰비언트 글로우) */}
-      <motion.div 
-        className="hidden md:block fixed top-0 left-0 w-[40vw] h-[40vw] rounded-full pointer-events-none z-0 mix-blend-screen opacity-30"
-        style={{ background: 'radial-gradient(circle, rgba(36,34,82,0.8) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(80px)', left: smoothX, top: smoothY, x: "-50%", y: "-50%" }}
-      />
-
       {/* 프리로더 */}
       <AnimatePresence>
         {isLoading && (
           <motion.div exit={{ opacity: 0, y: "-100%" }} transition={{ duration: 0.8, ease: customEase }} className="fixed inset-0 z-[300] bg-[#0a0a0a] flex flex-col items-center justify-center">
             <div className="text-[25vw] md:text-[15vw] font-black italic tracking-tighter leading-none">{loadingProgress}%</div>
-            <div className="text-[10px] font-bold tracking-[0.4em] uppercase mt-4 opacity-40 text-white">Loading Portfolio</div>
+            <div className="text-[10px] font-bold tracking-[0.4em] uppercase mt-4 opacity-40 text-white">Loading KIM MINSOO</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -222,16 +285,22 @@ export default function App() {
         </motion.div>
       </section>
 
-      <section className="min-h-screen flex flex-col items-center justify-center bg-[#0a0a0a] py-32 md:py-40 px-6 overflow-hidden relative z-10" onMouseEnter={() => setCursorVariant("default")}>
-        <motion.div style={{ y: titleY }} className="text-center z-10 max-w-5xl">
+      {/* --- ✨ CAPTURING PURE EMOTION WITH 레퍼런스 3D 큐브 --- */}
+      <section className="min-h-screen flex flex-col items-center justify-center bg-[#0a0a0a] py-32 md:py-40 px-6 overflow-hidden relative selection:bg-[#242252]/40" onMouseEnter={() => setCursorVariant("default")}>
+        
+        {/* 🔥 NEW: 마우스를 따라 미세하게 회전하는 점선 큐브 Canvas */}
+        <InteractiveCubeBackground />
+
+        {/* 텍스트는 큐브보다 위에 나오도록 z-10 적용 */}
+        <motion.div style={{ y: titleY }} className="text-center max-w-5xl relative z-10">
           <motion.div variants={staggerContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-100px" }}>
-            <h2 className="text-4xl md:text-8xl font-black tracking-tighter uppercase mb-6 leading-tight flex flex-col items-center">
-              <div className="overflow-hidden"><motion.span variants={revealUp} className="block text-white drop-shadow-2xl">{t.capture1}</motion.span></div>
-              <div className="overflow-hidden"><motion.span variants={revealUp} className="block text-[#242252] drop-shadow-2xl">{t.capture2}</motion.span></div>
+            <h2 className="text-4xl md:text-8xl font-black tracking-tighter uppercase mb-6 leading-tight flex flex-col items-center mix-blend-difference">
+              <div className="overflow-hidden"><motion.span variants={revealUp} className="block text-white">{t.capture1}</motion.span></div>
+              <div className="overflow-hidden"><motion.span variants={revealUp} className="block text-[#242252]">{t.capture2}</motion.span></div>
             </h2>
           </motion.div>
           <motion.div initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} transition={{ duration: 1.5, ease: customEase }} viewport={{ once: true }} className="w-16 md:w-20 h-px bg-[#242252] mx-auto my-10 md:my-12 opacity-50 origin-center"></motion.div>
-          <motion.p initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 0.6, y: 0 }} transition={{ duration: 1, delay: 0.4, ease: customEase }} viewport={{ once: true }} className="text-[#D8CFBC] text-xs md:text-lg font-medium leading-loose md:max-w-xl mx-auto">
+          <motion.p initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 0.6, y: 0 }} transition={{ duration: 1, delay: 0.4, ease: customEase }} viewport={{ once: true }} className="text-[#D8CFBC] text-xs md:text-lg font-medium leading-loose md:max-w-xl mx-auto mix-blend-difference">
             {t.captureDesc}
           </motion.p>
         </motion.div>
